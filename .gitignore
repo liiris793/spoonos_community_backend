@@ -7,7 +7,7 @@ __pycache__/
 .pytest_cache/
 **/.pytest_cache/
 .env
-data/
+/data/
 exports/
 *.log
 .DS_Store
