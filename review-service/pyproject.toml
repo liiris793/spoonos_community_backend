@@ -1,0 +1,19 @@
+[project]
+name = "spoonos-review-service"
+version = "0.1.0"
+description = "Rule and AI assisted pre-review service for SpoonOS community tasks"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "pydantic>=2.10.0",
+  "python-dotenv>=1.0.1",
+  "uvicorn>=0.34.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

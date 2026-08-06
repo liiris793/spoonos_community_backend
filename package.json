@@ -1,0 +1,44 @@
+{
+  "name": "spoonos-community-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modular Discord bot for the SpoonOS Community Contribution Program",
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx src/scripts/run-all.ts --dev",
+    "dev:bot": "tsx watch src/index.ts",
+    "dev:review": "cd review-service && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --env-file ../.env",
+    "dev:local": "PUBLIC_API_ENABLED=true PUBLIC_API_PORT=8787 PUBLIC_API_HOST=127.0.0.1 PORTAL_CORS_ORIGIN=http://localhost:3000 COMMUNITY_PORTAL_URL=http://localhost:3000 tsx watch src/index.ts",
+    "dev:api": "PUBLIC_API_PORT=8787 PUBLIC_API_HOST=127.0.0.1 PORTAL_CORS_ORIGIN=http://localhost:3000 node --import tsx src/scripts/portal-api.ts",
+    "start": "node --import tsx src/scripts/run-all.ts",
+    "start:bot": "node --import tsx src/index.ts",
+    "start:review": "cd review-service && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --env-file ../.env",
+    "deploy:commands": "node --import tsx src/discord/deploy-commands.ts",
+    "seed": "node --import tsx src/scripts/seed.ts",
+    "seed:mock-submissions": "node --import tsx src/scripts/mock-submissions.ts",
+    "seed:ai-review-test": "node --import tsx src/scripts/seed-ai-review-test.ts",
+    "seed:ai-review-test:fresh": "node --import tsx src/scripts/seed-ai-review-test.ts --fresh",
+    "seed:mock-leaderboard": "node --import tsx src/scripts/mock-leaderboard.ts",
+    "clear:mock-leaderboard": "node --import tsx src/scripts/mock-leaderboard.ts --clear",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7",
+    "https-proxy-agent": "^9.1.0",
+    "undici": "^6.28.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
