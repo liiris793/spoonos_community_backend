@@ -29,6 +29,34 @@ PIPELINES_BY_TASK = {
 }
 
 
+def _extract_message_items(ai: Any) -> list[dict[str, Any]]:
+    """Robustly pull per-message decisions out of an LLM JSON response.
+
+    Providers wrap the decision array under inconsistent keys (``items``,
+    ``evaluations``, ``messages``) and may use ``message_id`` or ``messageId``.
+    Rather than guessing one key, accept any top-level list whose elements are
+    dicts carrying a message identifier.
+    """
+    if not isinstance(ai, dict):
+        return []
+    for key in ("items", "evaluations", "messages"):
+        value = ai.get(key)
+        if isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
+            return [v for v in value if isinstance(v, dict)]
+    # Fallback: scan every top-level list for message-bearing dicts.
+    for value in ai.values():
+        if (
+            isinstance(value, list)
+            and value
+            and all(
+                isinstance(v, dict) and (v.get("message_id") or v.get("messageId"))
+                for v in value
+            )
+        ):
+            return [v for v in value if isinstance(v, dict)]
+    return []
+
+
 def _response(
     *, score: int, recommendation: str, flags: list[str], missing: list[str],
     questions: list[str], rule_result: dict[str, Any], ai_result: dict[str, Any]
@@ -228,8 +256,9 @@ async def precheck_activity(
             },
         ) if passed else {"items": []}
         ai_map = {
-            str(item.get("message_id")): item
-            for item in (ai.get("items") or ai.get("evaluations") or [])
+            str(item.get("message_id") or item.get("messageId")): item
+            for item in _extract_message_items(ai)
+            if item.get("message_id") or item.get("messageId")
         }
         ai_enabled = ai.get("status") not in {"skipped", "error"}
         valid_count = 0
