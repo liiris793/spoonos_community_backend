@@ -9,16 +9,21 @@ import { ActivityService } from "../src/services/activity-service.js";
 import { TaskService } from "../src/services/task-service.js";
 
 class FakeActivityPrecheck extends ActivityPrecheckClient {
+  private validCount: number;
+  constructor(validCount = 5) {
+    super();
+    this.validCount = validCount;
+  }
   override async precheck(input: Parameters<ActivityPrecheckClient["precheck"]>[0]) {
     return {
       activityDate: input.activityDate,
       users: [
         {
           userId: "user-1",
-          candidateMessages: 5,
-          rulePassedMessages: 5,
-          aiValidMessages: 5,
-          suggestedPoints: 20,
+          candidateMessages: input.messages.length,
+          rulePassedMessages: input.messages.length,
+          aiValidMessages: this.validCount,
+          suggestedPoints: Math.min(this.validCount, 5) * 4,
           recommendation: "pass" as const,
           flags: [],
           reviewQuestions: ["Verify the topic relevance."],
@@ -149,5 +154,52 @@ describe("daily activity pre-review", () => {
     expect(result.submissionsCreated).toBe(1);
     // Should only award 10 points (800 - 790 = 10)
     expect(pointsRepo.total("test-season", "user-1")).toBe(800);
+  });
+
+  it("awards partial points based on valid message count (3 valid = 12 points)", async () => {
+    const activity = new ActivityService(
+      new TaskService(),
+      new FakeActivityPrecheck(3),
+      undefined,
+      ["channel-1"],
+      new PointsRepository()
+    );
+    for (let index = 1; index <= 5; index += 1) {
+      activity.recordMessage("test-season", {
+        messageId: `partial-${index}`,
+        userId: "user-1",
+        channelId: "channel-1",
+        content: `SpoonOS discussion message ${index}.`,
+        createdAtUtc: `2026-08-01T10:0${index}:00.000Z`
+      });
+    }
+
+    const result = await activity.prepareDailyReview("test-season", "2026-08-01");
+    expect(result.submissionsCreated).toBe(1);
+    expect(result.pointsAwarded).toBe(12);
+    expect(new PointsRepository().total("test-season", "user-1")).toBe(12);
+  });
+
+  it("awards 0 points when no valid messages", async () => {
+    const activity = new ActivityService(
+      new TaskService(),
+      new FakeActivityPrecheck(0),
+      undefined,
+      ["channel-1"],
+      new PointsRepository()
+    );
+    for (let index = 1; index <= 5; index += 1) {
+      activity.recordMessage("test-season", {
+        messageId: `nosh-${index}`,
+        userId: "user-1",
+        channelId: "channel-1",
+        content: `Message ${index}.`,
+        createdAtUtc: `2026-08-02T10:0${index}:00.000Z`
+      });
+    }
+
+    const result = await activity.prepareDailyReview("test-season", "2026-08-02");
+    expect(result.submissionsCreated).toBe(0);
+    expect(result.pointsAwarded).toBe(0);
   });
 });

@@ -168,7 +168,6 @@ export class ActivityService {
     let totalPointsAwarded = 0;
     const sourceByMessageId = new Map(rows.map((row) => [row.message_id, row]));
     const seasonCap = task.config.seasonPointsCap;
-    const basePoints = task.config.basePoints;
     const transaction = db.transaction(() => {
       const updateMessage = db.prepare(
         `UPDATE activity_messages SET
@@ -194,11 +193,15 @@ export class ActivityService {
         ).get(seasonId, user.userId, activityDate);
         if (existing) continue;
 
-        // Only auto-approve users whose AI recommendation is "pass"
-        if (user.recommendation !== "pass") continue;
+        // Points: 4 per valid message, max 5 messages = 20/day
+        const POINTS_PER_MESSAGE = 4;
+        const MAX_MESSAGES_PER_DAY = 5;
+        const validCount = Math.min(user.aiValidMessages, MAX_MESSAGES_PER_DAY);
+        if (validCount === 0) continue;
+
+        let awardPoints = validCount * POINTS_PER_MESSAGE;
 
         // Check season points cap
-        let awardPoints = basePoints;
         if (seasonCap) {
           const earned = this.points.totalForTask(seasonId, user.userId, "T001");
           if (earned >= seasonCap) {
@@ -219,6 +222,7 @@ export class ActivityService {
               `Candidate messages: ${user.candidateMessages}.`,
               `Rule-passed messages: ${user.rulePassedMessages}.`,
               `AI-valid messages: ${user.aiValidMessages}.`,
+              `Scored messages: ${validCount} / ${MAX_MESSAGES_PER_DAY}.`,
               `Awarded points: ${awardPoints}.`
             ].join(" "),
             structuredData: {
@@ -263,7 +267,7 @@ export class ActivityService {
           userId: user.userId,
           taskId: "T001",
           submissionId: submission.id,
-          basePoints,
+          basePoints: awardPoints,
           multiplier: 1,
           points: awardPoints,
           reason: `Daily activity auto-approved for ${activityDate} UTC`,
