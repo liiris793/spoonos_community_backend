@@ -837,7 +837,7 @@ async function handleCommand(
           result.messages === 0
             ? "No messages found. Make sure ACTIVITY_CHANNEL_IDS is configured and you sent messages in the channel."
             : result.submissionsCreated === 0
-              ? "Messages found but no auto-approvals. Need >= 5 valid messages per user with AI recommendation 'pass'."
+              ? "Messages found but no auto-approvals. Need at least 1 valid message per user with AI recommendation 'pass'."
               : "Auto-approve is working! Check your points with `/points`."
         ].join("\n")
       });

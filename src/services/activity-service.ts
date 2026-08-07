@@ -145,7 +145,7 @@ export class ActivityService {
     const response = await this.precheck.precheck({
       seasonId,
       activityDate,
-      threshold: 5,
+      threshold: 1,
       basePoints: task.config.basePoints,
       topicDefinition: task.config.topicDefinition ?? task.config.description,
       reviewCriteria: task.config.reviewCriteria ?? task.config.requirements,
