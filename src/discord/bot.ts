@@ -781,8 +781,12 @@ async function handleCommand(
       );
     }
     const subcommand = interaction.options.getSubcommand();
-    const activityDate = interaction.options.getString("date", true);
+    const activityDate = interaction.options.getString("date");
     if (subcommand === "status") {
+      if (!activityDate) {
+        await interaction.reply({ content: "Date is required.", flags: MessageFlags.Ephemeral });
+        return;
+      }
       const status = deps.activity.status(seasonId, activityDate);
       await interaction.reply({
         content: [
@@ -796,6 +800,10 @@ async function handleCommand(
       return;
     }
     if (subcommand === "precheck") {
+      if (!activityDate) {
+        await interaction.reply({ content: "Date is required.", flags: MessageFlags.Ephemeral });
+        return;
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const result = await deps.activity.prepareDailyReview(seasonId, activityDate);
       await interaction.editReply({
@@ -803,15 +811,45 @@ async function handleCommand(
           `Daily activity precheck completed for ${activityDate} UTC.`,
           `Messages analyzed: ${result.messages}`,
           `Members analyzed: ${result.users}`,
-          `Review submissions created: ${result.submissionsCreated}`,
-          `Skipped because of weekly limits: ${result.skippedWeeklyLimit}`,
-          "Use `/review export start_date:` with this date to download the review sheet."
+          `Auto-approved submissions: ${result.submissionsCreated}`,
+          `Points awarded: ${result.pointsAwarded}`,
+          `Skipped (season cap reached): ${result.skippedCap}`,
+          "Use `/activity-admin status` to check details."
+        ].join("\n")
+      });
+      return;
+    }
+    if (subcommand === "test") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const testDate = interaction.options.getString("date")
+        || new Date().toISOString().slice(0, 10);
+      const result = await deps.activity.prepareDailyReview(seasonId, testDate, {
+        allowIncompleteDay: true
+      });
+      await interaction.editReply({
+        content: [
+          `**Test results for ${testDate} UTC**`,
+          `Messages analyzed: ${result.messages}`,
+          `Members analyzed: ${result.users}`,
+          `Auto-approved submissions: ${result.submissionsCreated}`,
+          `Points awarded: ${result.pointsAwarded}`,
+          `Skipped (season cap reached): ${result.skippedCap}`,
+          result.messages === 0
+            ? "No messages found. Make sure ACTIVITY_CHANNEL_IDS is configured and you sent messages in the channel."
+            : result.submissionsCreated === 0
+              ? "Messages found but no auto-approvals. Need >= 5 valid messages per user with AI recommendation 'pass'."
+              : "Auto-approve is working! Check your points with `/points`."
         ].join("\n")
       });
       return;
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // --- collect subcommand (fallback) ---
+    if (!activityDate) {
+      await interaction.reply({ content: "Date is required.", flags: MessageFlags.Ephemeral });
+      return;
+    }
     const channel = interaction.options.getChannel("channel", true) as any;
     if (!deps.activity.isAllowedChannel(seasonId, channel.id)) {
       throw new AppError(

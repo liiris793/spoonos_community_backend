@@ -39,6 +39,8 @@ export type DailyPrecheckSummary = {
   messages: number;
   users: number;
   submissionsCreated: number;
+  pointsAwarded: number;
+  skippedCap: number;
   skippedWeeklyLimit: number;
 };
 
@@ -109,10 +111,11 @@ export class ActivityService {
 
   async prepareDailyReview(
     seasonId: string,
-    activityDate: string
+    activityDate: string,
+    options?: { allowIncompleteDay?: boolean }
   ): Promise<DailyPrecheckSummary> {
     parseUtcDate(activityDate);
-    if (activityDate >= utcDate()) {
+    if (!options?.allowIncompleteDay && activityDate >= utcDate()) {
       throw new AppError(
         "UTC day not complete",
         "UTC_DAY_NOT_COMPLETE",
@@ -137,7 +140,7 @@ export class ActivityService {
     ) as ActivityRow[];
 
     if (!rows.length) {
-      return { activityDate, messages: 0, users: 0, submissionsCreated: 0, skippedWeeklyLimit: 0 };
+      return { activityDate, messages: 0, users: 0, submissionsCreated: 0, pointsAwarded: 0, skippedCap: 0, skippedWeeklyLimit: 0 };
     }
     const response = await this.precheck.precheck({
       seasonId,
@@ -162,6 +165,7 @@ export class ActivityService {
     let created = 0;
     let skippedWeeklyLimit = 0;
     let skippedCap = 0;
+    let totalPointsAwarded = 0;
     const sourceByMessageId = new Map(rows.map((row) => [row.message_id, row]));
     const seasonCap = task.config.seasonPointsCap;
     const basePoints = task.config.basePoints;
@@ -265,6 +269,7 @@ export class ActivityService {
           reason: `Daily activity auto-approved for ${activityDate} UTC`,
           operatorId: "system"
         });
+        totalPointsAwarded += awardPoints;
         db.prepare(
           `UPDATE submissions SET created_at = ?, updated_at = ? WHERE id = ?`
         ).run(`${activityDate} 23:59:59`, `${activityDate} 23:59:59`, submission.id);
@@ -295,6 +300,8 @@ export class ActivityService {
       messages: rows.length,
       users: response.users.length,
       submissionsCreated: created,
+      pointsAwarded: totalPointsAwarded,
+      skippedCap,
       skippedWeeklyLimit
     };
   }

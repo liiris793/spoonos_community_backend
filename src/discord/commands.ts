@@ -455,6 +455,16 @@ export const commands = [
             .setDescription("UTC date in YYYY-MM-DD format")
             .setRequired(true)
         )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("test")
+        .setDescription("Test auto-approve on today's (or a specified) messages, bypassing the completed-day check")
+        .addStringOption((option) =>
+          option
+            .setName("date")
+            .setDescription("UTC date in YYYY-MM-DD format (defaults to today UTC)")
+        )
     ),
   new SlashCommandBuilder()
     .setName("export")
