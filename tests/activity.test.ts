@@ -6,7 +6,6 @@ import { TaskRepository } from "../src/db/task-repository.js";
 import { PluginRegistry } from "../src/plugins/registry.js";
 import { ActivityPrecheckClient } from "../src/services/activity-precheck-client.js";
 import { ActivityService } from "../src/services/activity-service.js";
-import { SubmissionService } from "../src/services/submission-service.js";
 import { TaskService } from "../src/services/task-service.js";
 
 class FakeActivityPrecheck extends ActivityPrecheckClient {
@@ -50,7 +49,8 @@ const activityTask: TaskConfig = {
   reviewMode: "auto",
   claimRequired: false,
   revisionAllowed: false,
-  limits: { perDay: 1, perWeek: 5 },
+  limits: { perDay: 1 },
+  seasonPointsCap: 800,
   requirements: [],
   submissionFields: [],
   pluginIds: [],
@@ -78,12 +78,13 @@ beforeEach(() => {
 });
 
 describe("daily activity pre-review", () => {
-  it("creates a prechecked submission but awards no points until human approval", async () => {
+  it("auto-approves submission and awards points immediately", async () => {
     const activity = new ActivityService(
       new TaskService(),
       new FakeActivityPrecheck(),
       undefined,
-      ["channel-1"]
+      ["channel-1"],
+      new PointsRepository()
     );
     for (let index = 1; index <= 5; index += 1) {
       expect(activity.recordMessage("test-season", {
@@ -104,19 +105,49 @@ describe("daily activity pre-review", () => {
 
     const result = await activity.prepareDailyReview("test-season", "2026-07-30");
     expect(result.submissionsCreated).toBe(1);
-    expect(new PointsRepository().total("test-season", "user-1")).toBe(0);
+    expect(new PointsRepository().total("test-season", "user-1")).toBe(20);
 
     const submission = db.prepare(
       "SELECT id, status FROM submissions WHERE task_id = 'T001'"
     ).get() as { id: string; status: string };
-    expect(submission.status).toBe("Prechecked");
+    expect(submission.status).toBe("Approved");
+  });
 
-    new SubmissionService(new PluginRegistry()).review({
-      submissionId: submission.id,
-      reviewerId: "reviewer-1",
-      decision: "approve",
-      note: "Messages verified"
+  it("skips users who reached the season points cap", async () => {
+    const pointsRepo = new PointsRepository();
+    const activity = new ActivityService(
+      new TaskService(),
+      new FakeActivityPrecheck(),
+      undefined,
+      ["channel-1"],
+      pointsRepo
+    );
+    // Pre-award enough points to be near the cap
+    pointsRepo.add({
+      seasonId: "test-season",
+      userId: "user-1",
+      taskId: "T001",
+      submissionId: "manual-sub",
+      basePoints: 20,
+      multiplier: 1,
+      points: 790,
+      reason: "Pre-existing points",
+      operatorId: "test"
     });
-    expect(new PointsRepository().total("test-season", "user-1")).toBe(20);
+
+    for (let index = 1; index <= 5; index += 1) {
+      activity.recordMessage("test-season", {
+        messageId: `msg-cap-${index}`,
+        userId: "user-1",
+        channelId: "channel-1",
+        content: `Meaningful message ${index} about SpoonOS.`,
+        createdAtUtc: `2026-07-31T10:0${index}:00.000Z`
+      });
+    }
+
+    const result = await activity.prepareDailyReview("test-season", "2026-07-31");
+    expect(result.submissionsCreated).toBe(1);
+    // Should only award 10 points (800 - 790 = 10)
+    expect(pointsRepo.total("test-season", "user-1")).toBe(800);
   });
 });

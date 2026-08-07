@@ -110,32 +110,54 @@ if (config.publicApiEnabled) {
   startPublicApi({ client: bot, tasks, points });
 }
 
-const precheckYesterday = async (): Promise<void> => {
+const precheckRecentDays = async (): Promise<void> => {
   if (
     tasks.get("T001", config.defaultSeasonId).status !== "Published" ||
     !activity.allowedChannelIds(config.defaultSeasonId).length
   ) {
     return;
   }
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  try {
-    const result = await activity.prepareDailyReview(
-      config.defaultSeasonId,
-      yesterday
-    );
-    if (result.submissionsCreated) {
-      console.log(
-        `Prepared ${result.submissionsCreated} daily activity review(s) for ${yesterday} UTC.`
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  for (let i = config.precheckLookbackDays; i >= 1; i--) {
+    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    if (date >= todayUtc) continue;
+    try {
+      const result = await activity.prepareDailyReview(
+        config.defaultSeasonId,
+        date
       );
+      if (result.submissionsCreated) {
+        console.log(
+          `Prepared ${result.submissionsCreated} daily activity review(s) for ${date} UTC.`
+        );
+      } else {
+        console.log(`No new submissions for ${date} UTC (already reviewed or no qualifying messages).`);
+      }
+    } catch (error) {
+      console.error(`Daily activity precheck failed for ${date} UTC`, error);
     }
-  } catch (error) {
-    console.error("Daily activity precheck failed", error);
   }
 };
 
+const scheduleDailyPrecheck = (): void => {
+  const now = Date.now();
+  const nextUtcMidnight = new Date(Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate() + 1,
+    0, 0, 0, 0
+  )).getTime();
+  const msUntilMidnight = nextUtcMidnight - now;
+
+  setTimeout(async () => {
+    await precheckRecentDays();
+    scheduleDailyPrecheck();
+  }, msUntilMidnight).unref();
+};
+
 if (config.precheckServiceUrl) {
-  void precheckYesterday();
-  setInterval(() => void precheckYesterday(), 60 * 60 * 1000).unref();
+  void precheckRecentDays();
+  scheduleDailyPrecheck();
 }

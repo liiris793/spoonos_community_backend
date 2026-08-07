@@ -21,7 +21,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().optional(),
   PUBLIC_API_HOST: z.string().default("0.0.0.0"),
   PORTAL_CORS_ORIGIN: z.string().default("*"),
-  COMMUNITY_PORTAL_URL: z.string().url().optional().or(z.literal(""))
+  COMMUNITY_PORTAL_URL: z.string().url().optional().or(z.literal("")),
+  PRECHECK_LOOKBACK_DAYS: z.coerce.number().int().positive().default(1)
 });
 
 const parsed = envSchema.parse(process.env);
@@ -51,5 +52,6 @@ export const config = {
   publicApiPort: parsed.PORT ?? parsed.PUBLIC_API_PORT,
   publicApiHost: parsed.PUBLIC_API_HOST,
   portalCorsOrigin: parsed.PORTAL_CORS_ORIGIN,
-  communityPortalUrl: parsed.COMMUNITY_PORTAL_URL || undefined
+  communityPortalUrl: parsed.COMMUNITY_PORTAL_URL || undefined,
+  precheckLookbackDays: parsed.PRECHECK_LOOKBACK_DAYS
 };

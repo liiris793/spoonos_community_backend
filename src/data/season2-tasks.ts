@@ -19,6 +19,7 @@ type SeedTask = {
   claimRequired?: boolean;
   minPoints?: number;
   maxPoints?: number;
+  seasonPointsCap?: number;
   plugins?: string[];
 };
 
@@ -63,6 +64,7 @@ const task = (input: SeedTask): TaskConfig => ({
   claimRequired: input.claimRequired ?? false,
   revisionAllowed: true,
   limits: input.limits ?? {},
+  seasonPointsCap: input.seasonPointsCap,
   requirements: input.requirements,
   submissionFields: ["summary", "proof_url", "attachment"],
   pluginIds:
@@ -109,9 +111,10 @@ export const season2Tasks: TaskConfig[] = [
     points: 20,
     description: "Post at least five meaningful messages related to active community topics in one day.",
     requirements: ["No duplicates, sentence splitting, or emoji spam", "No advertising, scams, or meaningless messages"],
-    limits: { perDay: 1, perWeek: 5 },
-    reviewMode: "auto",
-    plugins: []
+  limits: { perDay: 1 },
+  reviewMode: "auto",
+  seasonPointsCap: 800,
+  plugins: []
   }),
   task({
     id: "T002",

@@ -1,6 +1,7 @@
 import { AppError } from "../core/errors.js";
 import type { PrecheckResult } from "../core/types.js";
 import { db } from "../db/database.js";
+import { PointsRepository } from "../db/points-repository.js";
 import { SubmissionRepository } from "../db/submission-repository.js";
 import { ActivityPrecheckClient, type ActivityMessageInput } from "./activity-precheck-client.js";
 import { TaskService } from "./task-service.js";
@@ -46,7 +47,8 @@ export class ActivityService {
     private readonly tasks = new TaskService(),
     private readonly precheck = new ActivityPrecheckClient(),
     private readonly submissions = new SubmissionRepository(),
-    private readonly configuredChannelIds: string[] = []
+    private readonly configuredChannelIds: string[] = [],
+    private readonly points = new PointsRepository()
   ) {}
 
   allowedChannelIds(seasonId: string): string[] {
@@ -159,7 +161,10 @@ export class ActivityService {
 
     let created = 0;
     let skippedWeeklyLimit = 0;
+    let skippedCap = 0;
     const sourceByMessageId = new Map(rows.map((row) => [row.message_id, row]));
+    const seasonCap = task.config.seasonPointsCap;
+    const basePoints = task.config.basePoints;
     const transaction = db.transaction(() => {
       const updateMessage = db.prepare(
         `UPDATE activity_messages SET
@@ -185,20 +190,37 @@ export class ActivityService {
         ).get(seasonId, user.userId, activityDate);
         if (existing) continue;
 
+        // Only auto-approve users whose AI recommendation is "pass"
+        if (user.recommendation !== "pass") continue;
+
+        // Check season points cap
+        let awardPoints = basePoints;
+        if (seasonCap) {
+          const earned = this.points.totalForTask(seasonId, user.userId, "T001");
+          if (earned >= seasonCap) {
+            skippedCap += 1;
+            continue;
+          }
+          if (earned + awardPoints > seasonCap) {
+            awardPoints = seasonCap - earned;
+          }
+        }
+
         const submission = this.submissions.create(
           {
             taskId: "T001",
             userId: user.userId,
             summary: [
-              `Daily activity precheck for ${activityDate} UTC.`,
+              `Daily activity auto-approved for ${activityDate} UTC.`,
               `Candidate messages: ${user.candidateMessages}.`,
               `Rule-passed messages: ${user.rulePassedMessages}.`,
               `AI-valid messages: ${user.aiValidMessages}.`,
-              `Suggested points: ${user.suggestedPoints}.`
+              `Awarded points: ${awardPoints}.`
             ].join(" "),
             structuredData: {
               source: "daily_activity_precheck",
               activityDate,
+              autoApproved: true,
               ...user,
               messageEvidence: user.messages.map((message) => {
                 const source = sourceByMessageId.get(message.messageId);
@@ -216,16 +238,33 @@ export class ActivityService {
         );
         const precheckResult: PrecheckResult = {
           pluginId: "daily_activity_v1",
-          score: user.recommendation === "pass" ? 90 : user.recommendation === "review" ? 60 : 30,
-          recommendation: user.recommendation,
+          score: 90,
+          recommendation: "pass",
           flags: user.flags,
-          missingItems: user.flags.includes("daily_threshold_not_met")
-            ? ["At least five valid topic-related messages in the UTC day"]
-            : [],
+          missingItems: [],
           reviewQuestions: user.reviewQuestions,
           raw: user
         };
-        this.submissions.updateStatus(submission.id, "Prechecked", { aiPrecheck: precheckResult });
+        // Auto-approve: skip Prechecked, go directly to Approved
+        this.submissions.updateStatus(submission.id, "Approved", {
+          aiPrecheck: precheckResult,
+          reviewerId: "system",
+          reviewNote: "Auto-approved by daily activity precheck",
+          qualityCoefficient: 1,
+          finalPoints: awardPoints
+        });
+        // Award points
+        this.points.add({
+          seasonId,
+          userId: user.userId,
+          taskId: "T001",
+          submissionId: submission.id,
+          basePoints,
+          multiplier: 1,
+          points: awardPoints,
+          reason: `Daily activity auto-approved for ${activityDate} UTC`,
+          operatorId: "system"
+        });
         db.prepare(
           `UPDATE submissions SET created_at = ?, updated_at = ? WHERE id = ?`
         ).run(`${activityDate} 23:59:59`, `${activityDate} 23:59:59`, submission.id);
@@ -242,12 +281,15 @@ export class ActivityService {
           user.candidateMessages,
           user.rulePassedMessages,
           user.aiValidMessages,
-          user.suggestedPoints
+          awardPoints
         );
         created += 1;
       }
     });
     transaction();
+    if (skippedCap > 0) {
+      console.log(`Skipped ${skippedCap} user(s) who reached the season points cap (${seasonCap}).`);
+    }
     return {
       activityDate,
       messages: rows.length,

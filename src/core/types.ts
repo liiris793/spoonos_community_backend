@@ -55,6 +55,7 @@ export interface TaskConfig {
   targetPostIds?: string[];
   opensAt?: string;
   closesAt?: string;
+  seasonPointsCap?: number;
 }
 
 export interface TaskRecord {

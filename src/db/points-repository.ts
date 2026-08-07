@@ -43,6 +43,17 @@ export class PointsRepository {
     return row.total;
   }
 
+  totalForTask(seasonId: string, userId: string, taskId: string): number {
+    const row = db
+      .prepare(
+        `SELECT COALESCE(SUM(points), 0) AS total
+         FROM point_ledger
+         WHERE season_id = ? AND user_id = ? AND task_id = ?`
+      )
+      .get(seasonId, userId, taskId) as { total: number };
+    return row.total;
+  }
+
   leaderboard(
     seasonId: string,
     limit = 10
