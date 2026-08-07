@@ -227,7 +227,10 @@ async def precheck_activity(
                 "messages": [{"message_id": m.messageId, "content": m.content} for m in passed],
             },
         ) if passed else {"items": []}
-        ai_map = {str(item.get("message_id")): item for item in ai.get("items", [])}
+        ai_map = {
+            str(item.get("message_id")): item
+            for item in (ai.get("items") or ai.get("evaluations") or [])
+        }
         ai_enabled = ai.get("status") not in {"skipped", "error"}
         valid_count = 0
         for decision in decisions:
@@ -272,7 +275,7 @@ async def precheck_activity(
                 recommendation=recommendation,
                 flags=flags,
                 reviewQuestions=[
-                    "Confirm that at least five messages are relevant and substantive before approval."
+                    f"Confirm that at least {request.threshold} message(s) are relevant and substantive before approval."
                 ],
                 messages=decisions,
             )
