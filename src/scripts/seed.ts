@@ -11,8 +11,8 @@ export function seed(): void {
   ).run(
     "season-2",
     "SpoonOS Community Contribution Program · Season 2",
-    "2026-08-10T00:00:00+08:00",
-    "2026-09-30T23:59:59+08:00"
+    "2026-08-10T00:00:00Z",
+    "2026-10-10T23:59:59Z"
   );
 
   const repository = new TaskRepository();
