@@ -424,7 +424,7 @@ async function handleCommand(
   }
 
   if (interaction.commandName === "mysubmission") {
-    const submissionId = interaction.options.getString("id", true).toUpperCase();
+    const submissionId = interaction.options.getString("id", true);
     const submission = new SubmissionRepository().get(submissionId);
     if (!submission) {
       await interaction.reply({

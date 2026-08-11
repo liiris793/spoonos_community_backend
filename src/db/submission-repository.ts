@@ -75,7 +75,7 @@ export class SubmissionRepository {
 
   get(id: string): SubmissionRecord | undefined {
     const row = db
-      .prepare("SELECT * FROM submissions WHERE id = ?")
+      .prepare("SELECT * FROM submissions WHERE id = ? COLLATE NOCASE")
       .get(id) as SubmissionRow | undefined;
     return row ? rowToSubmission(row) : undefined;
   }
