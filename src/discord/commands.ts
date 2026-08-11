@@ -61,6 +61,18 @@ export const commands = [
     .setName("me")
     .setDescription("View my points, level, and recent tasks"),
   new SlashCommandBuilder()
+    .setName("mysubmissions")
+    .setDescription("View your own submissions (latest 10; full spreadsheet if you have more)"),
+  new SlashCommandBuilder()
+    .setName("mysubmission")
+    .setDescription("View a single submission's review details by ID")
+    .addStringOption((option) =>
+      option
+        .setName("id")
+        .setDescription("Submission ID, e.g. SUB-3F9K2Q")
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
     .setName("leaderboard")
     .setDescription("View the season leaderboard"),
   new SlashCommandBuilder()

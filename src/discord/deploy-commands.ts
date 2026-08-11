@@ -11,13 +11,7 @@ const rest = new REST({ version: "10", timeout: 45_000, retries: 5 }).setToken(
   config.discordToken
 );
 if (config.discordProxyUrl) {
-  rest.setAgent(
-    new ProxyAgent({
-      uri: config.discordProxyUrl,
-      requestTls: { timeout: 30_000 },
-      proxyTls: { timeout: 30_000 }
-    })
-  );
+  rest.setAgent(new ProxyAgent(config.discordProxyUrl));
 }
 
 if (config.discordGuildId) {

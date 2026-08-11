@@ -60,20 +60,12 @@ export function createBot(deps: Dependencies): Client {
 
   if (config.discordProxyUrl) {
     // REST API proxy (discord.js uses undici for REST requests)
-    const restAgent = new ProxyAgent({
-      uri: config.discordProxyUrl,
-      requestTls: { timeout: 30_000 },
-      proxyTls: { timeout: 30_000 }
-    });
+    const restAgent = new ProxyAgent(config.discordProxyUrl);
     client.rest.setAgent(restAgent);
     // Global fetch proxy — routes fetch() through proxy for external hosts
     // (Discord CDN downloads for task/review/announcement attachments)
     // but bypasses localhost for local service calls (127.0.0.1:8000 etc.)
-    const fetchProxyAgent = new ProxyAgent({
-      uri: config.discordProxyUrl,
-      requestTls: { timeout: 30_000 },
-      proxyTls: { timeout: 30_000 }
-    });
+    const fetchProxyAgent = new ProxyAgent(config.discordProxyUrl);
     const directAgent = new Agent({ connect: { timeout: 10_000 } });
     setGlobalDispatcher({
       dispatch(options: any, handler: any) {
@@ -377,6 +369,115 @@ async function handleCommand(
             { name: "Recent submissions", value: recent || "No submissions yet" }
           )
       ],
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (interaction.commandName === "mysubmissions") {
+    const all = new SubmissionRepository().listByUser(
+      seasonId,
+      interaction.user.id
+    );
+    if (all.length === 0) {
+      await interaction.reply({
+        content: "You have no submissions yet. Use `/submit` to get started.",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+    const latest = all.slice(0, 10);
+    const lines = latest.map((s) => {
+      const pts = s.finalPoints != null ? ` · ${s.finalPoints} pts` : "";
+      const date = s.createdAt.slice(0, 10);
+      return `**${s.id}** · ${s.taskId} · ${s.status}${pts} · ${date}`;
+    });
+    const more = all.length > 10;
+    const files = more
+      ? [
+          new AttachmentBuilder(
+            deps.submissions.exportUserSubmissions(
+              seasonId,
+              interaction.user.id
+            ),
+            { name: `my-submissions-${seasonId}.xlsx` }
+          )
+        ]
+      : [];
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x2563eb)
+          .setTitle(`${interaction.user.username}'s Submissions`)
+          .setDescription(
+            `${lines.join("\n")}${
+              more
+                ? `\n\nShowing the latest 10 of ${all.length}. The full list is attached as a spreadsheet.`
+                : `\n\nTotal: ${all.length} submission(s).`
+            }`
+          )
+      ],
+      files,
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (interaction.commandName === "mysubmission") {
+    const submissionId = interaction.options.getString("id", true).toUpperCase();
+    const submission = new SubmissionRepository().get(submissionId);
+    if (!submission) {
+      await interaction.reply({
+        content: `Submission \`${submissionId}\` was not found.`,
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+    if (submission.userId !== interaction.user.id && !canReview(interaction)) {
+      await interaction.reply({
+        content: "This submission belongs to another user.",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+    const fields = [
+      { name: "Submission ID", value: submission.id, inline: true },
+      { name: "Task ID", value: submission.taskId, inline: true },
+      {
+        name: "Status",
+        value: submission.status,
+        inline: true
+      },
+      {
+        name: "Points",
+        value: submission.finalPoints != null ? `${submission.finalPoints} pts` : "Pending",
+        inline: true
+      },
+      { name: "Submitted At", value: submission.createdAt, inline: true },
+      { name: "Review Note", value: submission.reviewNote || "—" }
+    ];
+    if (submission.aiPrecheck) {
+      const ai = submission.aiPrecheck;
+      fields.push({
+        name: "AI Precheck",
+        value: `Recommendation: ${ai.recommendation} · Score: ${ai.score}${
+          ai.flags.length ? `\nFlags: ${ai.flags.join(", ")}` : ""
+        }`
+      });
+    }
+    const embed = new EmbedBuilder()
+      .setColor(0x2563eb)
+      .setTitle(`Submission ${submission.id}`)
+      .addFields(fields)
+      .addFields({
+        name: "Summary",
+        value: submission.summary.slice(0, 1000) || "—"
+      });
+    if (submission.proofUrl) {
+      embed.addFields({ name: "Proof URL", value: submission.proofUrl });
+    }
+    await interaction.reply({
+      embeds: [embed],
       flags: MessageFlags.Ephemeral
     });
     return;

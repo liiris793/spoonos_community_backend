@@ -1,4 +1,5 @@
 import { AppError } from "../core/errors.js";
+import * as XLSX from "xlsx";
 import type {
   PrecheckResult,
   ReviewDecision,
@@ -398,6 +399,36 @@ export class SubmissionService {
       qualityCoefficient: coefficient,
       finalPoints: points
     });
+  }
+
+  /** Build an xlsx workbook (as a Buffer) containing every submission by a user. */
+  exportUserSubmissions(seasonId: string, userId: string): Buffer {
+    const rows = this.submissions.listByUser(seasonId, userId);
+    const headers = [
+      "Submission ID",
+      "Task ID",
+      "Status",
+      "Points",
+      "Review Note",
+      "Submitted At",
+      "Summary"
+    ];
+    const data = rows.map((s) => [
+      s.id,
+      s.taskId,
+      s.status,
+      s.finalPoints != null ? s.finalPoints : "",
+      s.reviewNote ?? "",
+      s.createdAt,
+      s.summary
+    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    sheet["!cols"] = headers.map((h, i) => ({
+      wch: i === headers.length - 1 ? 60 : Math.max(12, h.length + 2)
+    }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "My Submissions");
+    return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
   }
 
   private combinePrechecks(
