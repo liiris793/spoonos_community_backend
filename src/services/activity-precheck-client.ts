@@ -1,5 +1,17 @@
 import { AppError } from "../core/errors.js";
 
+// Total time we wait for the review-service to return a precheck. The service
+// runs AI over every qualifying user, which can take minutes on busy days, so
+// the previous 60s budget aborted before the service could respond. Override
+// with PRECHECK_REQUEST_TIMEOUT_MS if needed.
+const PRECHECK_REQUEST_TIMEOUT_MS = Number(
+  process.env.PRECHECK_REQUEST_TIMEOUT_MS
+);
+const PRECHECK_TIMEOUT =
+  Number.isFinite(PRECHECK_REQUEST_TIMEOUT_MS) && PRECHECK_REQUEST_TIMEOUT_MS > 0
+    ? PRECHECK_REQUEST_TIMEOUT_MS
+    : 300_000;
+
 export type ActivityMessageInput = {
   messageId: string;
   userId: string;
@@ -74,7 +86,7 @@ export class ActivityPrecheckClient {
           ...(this.token ? { authorization: `Bearer ${this.token}` } : {})
         },
         body: JSON.stringify(input),
-        signal: AbortSignal.timeout(60_000)
+        signal: AbortSignal.timeout(PRECHECK_TIMEOUT)
       });
     } catch (error) {
       throw new AppError(

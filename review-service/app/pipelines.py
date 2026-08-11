@@ -1,3 +1,5 @@
+import asyncio
+import os
 from collections import defaultdict
 from typing import Any
 
@@ -215,87 +217,91 @@ async def precheck_activity(
     for message in request.messages:
         grouped[message.userId].append(message)
 
-    users: list[ActivityUserResult] = []
-    for user_id, messages in grouped.items():
-        decisions: list[MessageDecision] = []
-        passed = []
-        seen: set[str] = set()
-        for message in messages:
-            ok, flags = activity_rule_check(message.content)
-            normalized = normalize_text(message.content).lower()
-            if normalized in seen:
-                ok = False
-                flags.append("duplicate_message")
-            seen.add(normalized)
-            if ok:
-                passed.append(message)
-            decisions.append(
-                MessageDecision(
-                    messageId=message.messageId,
-                    ruleStatus="pass" if ok else "fail",
-                    ruleFlags=flags,
-                    reason="Passed deterministic filters" if ok else ", ".join(flags),
+    # Evaluate users concurrently (bounded) so the endpoint returns well within
+    # the backend client timeout even when the LLM is slow. Sequential processing
+    # of N users each making one LLM call routinely exceeded 60s for busy days.
+    semaphore = asyncio.Semaphore(max(1, int(os.getenv("PRECHECK_CONCURRENCY", "6"))))
+
+    async def _evaluate_user(user_id: str, messages: list) -> ActivityUserResult:
+        async with semaphore:
+            decisions: list[MessageDecision] = []
+            passed = []
+            seen: set[str] = set()
+            for message in messages:
+                ok, flags = activity_rule_check(message.content)
+                normalized = normalize_text(message.content).lower()
+                if normalized in seen:
+                    ok = False
+                    flags.append("duplicate_message")
+                seen.add(normalized)
+                if ok:
+                    passed.append(message)
+                decisions.append(
+                    MessageDecision(
+                        messageId=message.messageId,
+                        ruleStatus="pass" if ok else "fail",
+                        ruleFlags=flags,
+                        reason="Passed deterministic filters" if ok else ", ".join(flags),
+                    )
                 )
+
+            ai = await llm.review(
+                system=(
+                    "You evaluate Discord messages for daily meaningful community participation. "
+                    "For every message, judge relevance to the supplied topic, substantive value, and "
+                    "whether it looks like generic filler. Return JSON with items: [{message_id, "
+                    "status: valid|invalid|uncertain, relevance_score:0-100, quality_score:0-100, "
+                    "reason}]. Evaluate only the messages provided."
+                ),
+                payload={
+                    "topic_definition": request.topicDefinition,
+                    "review_criteria": request.reviewCriteria,
+                    "disqualifiers": request.disqualifiers,
+                    "positive_examples": request.positiveExamples,
+                    "negative_examples": request.negativeExamples,
+                    "messages": [{"message_id": m.messageId, "content": m.content} for m in passed],
+                },
+            ) if passed else {"items": []}
+            ai_map = {
+                str(item.get("message_id") or item.get("messageId")): item
+                for item in _extract_message_items(ai)
+                if item.get("message_id") or item.get("messageId")
+            }
+            ai_enabled = ai.get("status") not in {"skipped", "error"}
+            valid_count = 0
+            for decision in decisions:
+                if decision.ruleStatus == "fail":
+                    continue
+                item = ai_map.get(decision.messageId)
+                if item:
+                    status = str(item.get("status", "uncertain"))
+                    if status not in {"valid", "invalid", "uncertain"}:
+                        status = "uncertain"
+                    decision.aiStatus = status
+                    decision.relevanceScore = int(item.get("relevance_score", 50))
+                    decision.qualityScore = int(item.get("quality_score", 50))
+                    decision.reason = str(item.get("reason", ""))[:500]
+                    if status == "valid":
+                        valid_count += 1
+                else:
+                    decision.aiStatus = "skipped" if not ai_enabled else "uncertain"
+                    decision.reason = (
+                        "AI was not configured; manual topic review required."
+                        if not ai_enabled else "AI returned no decision; manual review required."
+                    )
+
+            flags: list[str] = []
+            if not ai_enabled and passed:
+                flags.append("ai_not_configured")
+            count_for_threshold = valid_count if ai_enabled else len(passed)
+            if count_for_threshold < request.threshold:
+                flags.append("daily_threshold_not_met")
+            recommendation = (
+                "pass" if ai_enabled and valid_count >= request.threshold
+                else "revision" if len(passed) < request.threshold
+                else "review"
             )
-
-        ai = await llm.review(
-            system=(
-                "You evaluate Discord messages for daily meaningful community participation. "
-                "For every message, judge relevance to the supplied topic, substantive value, and "
-                "whether it looks like generic filler. Return JSON with items: [{message_id, "
-                "status: valid|invalid|uncertain, relevance_score:0-100, quality_score:0-100, "
-                "reason}]. Evaluate only the messages provided."
-            ),
-            payload={
-                "topic_definition": request.topicDefinition,
-                "review_criteria": request.reviewCriteria,
-                "disqualifiers": request.disqualifiers,
-                "positive_examples": request.positiveExamples,
-                "negative_examples": request.negativeExamples,
-                "messages": [{"message_id": m.messageId, "content": m.content} for m in passed],
-            },
-        ) if passed else {"items": []}
-        ai_map = {
-            str(item.get("message_id") or item.get("messageId")): item
-            for item in _extract_message_items(ai)
-            if item.get("message_id") or item.get("messageId")
-        }
-        ai_enabled = ai.get("status") not in {"skipped", "error"}
-        valid_count = 0
-        for decision in decisions:
-            if decision.ruleStatus == "fail":
-                continue
-            item = ai_map.get(decision.messageId)
-            if item:
-                status = str(item.get("status", "uncertain"))
-                if status not in {"valid", "invalid", "uncertain"}:
-                    status = "uncertain"
-                decision.aiStatus = status
-                decision.relevanceScore = int(item.get("relevance_score", 50))
-                decision.qualityScore = int(item.get("quality_score", 50))
-                decision.reason = str(item.get("reason", ""))[:500]
-                if status == "valid":
-                    valid_count += 1
-            else:
-                decision.aiStatus = "skipped" if not ai_enabled else "uncertain"
-                decision.reason = (
-                    "AI was not configured; manual topic review required."
-                    if not ai_enabled else "AI returned no decision; manual review required."
-                )
-
-        flags: list[str] = []
-        if not ai_enabled and passed:
-            flags.append("ai_not_configured")
-        count_for_threshold = valid_count if ai_enabled else len(passed)
-        if count_for_threshold < request.threshold:
-            flags.append("daily_threshold_not_met")
-        recommendation = (
-            "pass" if ai_enabled and valid_count >= request.threshold
-            else "revision" if len(passed) < request.threshold
-            else "review"
-        )
-        users.append(
-            ActivityUserResult(
+            return ActivityUserResult(
                 userId=user_id,
                 candidateMessages=len(messages),
                 rulePassedMessages=len(passed),
@@ -308,5 +314,10 @@ async def precheck_activity(
                 ],
                 messages=decisions,
             )
+
+    users = list(
+        await asyncio.gather(
+            *(_evaluate_user(uid, msgs) for uid, msgs in grouped.items())
         )
+    )
     return ActivityPrecheckResponse(activityDate=request.activityDate, users=users)
