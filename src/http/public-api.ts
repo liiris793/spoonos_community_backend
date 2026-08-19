@@ -84,7 +84,7 @@ const publicLeaderboard = async (
   { client, points }: PublicApiDependencies,
   seasonId: string
 ) => {
-  const board = points.leaderboard(seasonId, 10);
+  const board = points.leaderboardAll(seasonId);
   return Promise.all(
     board.map(async (entry) => {
       const profile = points.profile(seasonId, entry.userId);
