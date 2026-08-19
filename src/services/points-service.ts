@@ -35,6 +35,10 @@ export class PointsService {
     return this.points.leaderboard(seasonId, limit);
   }
 
+  leaderboardAll(seasonId: string) {
+    return this.points.leaderboard(seasonId, null);
+  }
+
   adjust(
     seasonId: string,
     userId: string,

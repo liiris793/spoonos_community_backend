@@ -56,8 +56,9 @@ export class PointsRepository {
 
   leaderboard(
     seasonId: string,
-    limit = 10
+    limit: number | null = 10
   ): { userId: string; points: number; rank: number }[] {
+    const limitClause = limit === null ? "" : "LIMIT ?";
     const rows = db
       .prepare(
         `SELECT user_id AS userId, SUM(points) AS points
@@ -65,9 +66,12 @@ export class PointsRepository {
          WHERE season_id = ?
          GROUP BY user_id
          ORDER BY points DESC, user_id ASC
-         LIMIT ?`
+         ${limitClause}`
       )
-      .all(seasonId, limit) as { userId: string; points: number }[];
+      .all(...(limit === null ? [seasonId] : [seasonId, limit])) as {
+      userId: string;
+      points: number;
+    }[];
     return rows.map((row, index) => ({ ...row, rank: index + 1 }));
   }
 
