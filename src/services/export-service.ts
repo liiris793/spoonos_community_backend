@@ -17,6 +17,7 @@ function toCsv(rows: Record<string, unknown>[]): string {
 export type ExportType =
   | "users"
   | "tasks"
+  | "task_configs"
   | "submissions"
   | "points"
   | "content";
@@ -69,6 +70,68 @@ export class ExportService {
              ORDER BY t.id`
           )
           .all(seasonId) as Record<string, unknown>[];
+      case "task_configs": {
+        const rows = db
+          .prepare(
+            `SELECT t.status, v.config_json
+             FROM tasks t
+             JOIN task_versions v
+               ON v.task_id = t.id
+              AND v.season_id = t.season_id
+              AND v.version = t.current_version
+             WHERE t.season_id = ?
+             ORDER BY t.id`
+          )
+          .all(seasonId) as Array<{ status: string; config_json: string }>;
+
+        const list = (value: unknown): string =>
+          Array.isArray(value) ? value.join(" | ") : "";
+        const limits = (value: unknown, key: string): string => {
+          if (!value || typeof value !== "object") return "";
+          const result = (value as Record<string, unknown>)[key];
+          return result == null ? "" : String(result);
+        };
+
+        return rows.map(({ status, config_json }) => {
+          const config = JSON.parse(config_json) as Record<string, unknown>;
+          const taskLimits = config.limits;
+          return {
+            task_id: config.id,
+            title: config.title,
+            type: config.type,
+            difficulty: config.difficulty,
+            description: config.description,
+            base_points: config.basePoints,
+            min_points: config.minPoints ?? "",
+            max_points: config.maxPoints ?? "",
+            status,
+            review_mode: config.reviewMode,
+            claim_required: config.claimRequired,
+            revision_allowed: config.revisionAllowed,
+            per_day: limits(taskLimits, "perDay"),
+            per_week: limits(taskLimits, "perWeek"),
+            per_month: limits(taskLimits, "perMonth"),
+            per_season: limits(taskLimits, "perSeason"),
+            requirements: list(config.requirements),
+            submission_fields: list(config.submissionFields),
+            ai_precheck: Array.isArray(config.pluginIds)
+              ? config.pluginIds.includes("ai_webhook_precheck")
+              : false,
+            precheck_pipeline: config.precheckPipeline ?? "",
+            review_criteria: list(config.reviewCriteria),
+            required_evidence: list(config.requiredEvidence),
+            disqualifiers: list(config.disqualifiers),
+            topic_definition: config.topicDefinition ?? "",
+            positive_examples: list(config.positiveExamples),
+            negative_examples: list(config.negativeExamples),
+            allowed_channel_ids: list(config.allowedChannelIds),
+            target_accounts: list(config.targetAccounts),
+            target_post_ids: list(config.targetPostIds),
+            opens_at: config.opensAt ?? "",
+            closes_at: config.closesAt ?? ""
+          };
+        });
+      }
       case "submissions":
         return db
           .prepare(
