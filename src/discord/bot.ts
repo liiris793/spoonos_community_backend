@@ -49,6 +49,13 @@ type Dependencies = {
   batchReviews: BatchReviewService;
 };
 
+const formatSeasonDate = (value?: string): string => {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+};
+
 export function createBot(deps: Dependencies): Client {
   const client = new Client({
     intents: [
@@ -241,6 +248,10 @@ async function handleCommand(
             "Complete missions, contribute content, and help build the community to earn season points and levels."
           )
           .addFields(
+            {
+              name: "Season dates",
+              value: `${formatSeasonDate(config.seasonStartsAt)} → ${formatSeasonDate(config.seasonEndsAt)}`
+            },
             { name: "Task center", value: "Use `/tasks`", inline: true },
             { name: "My progress", value: "Use `/me`", inline: true },
             {
