@@ -490,6 +490,7 @@ export const commands = [
         .addChoices(
           { name: "User summary", value: "users" },
           { name: "Task performance", value: "tasks" },
+          { name: "Task configurations (re-importable)", value: "task_configs" },
           { name: "Submissions", value: "submissions" },
           { name: "Point ledger", value: "points" },
           { name: "Content assets", value: "content" }

@@ -1242,11 +1242,12 @@ async function handleCommand(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const type = interaction.options.getString("type", true) as ExportType;
     const csv = deps.exports.export(seasonId, type);
+    const filenameSeason = seasonId.replace(/[^a-zA-Z0-9_-]/g, "-");
     await interaction.editReply({
-      content: `Season 2 ${type} export`,
+      content: `${seasonId} ${type} export`,
       files: [
         new AttachmentBuilder(Buffer.from(csv, "utf8"), {
-          name: `season2-${type}.csv`
+          name: `${filenameSeason}-${type}.csv`
         })
       ]
     });
