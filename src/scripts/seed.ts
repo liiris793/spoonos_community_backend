@@ -1,6 +1,7 @@
 import { db, migrate } from "../db/database.js";
 import { TaskRepository } from "../db/task-repository.js";
 import { season2Tasks } from "../data/season2-tasks.js";
+import { config } from "../config.js";
 
 export function seed(): void {
   migrate();
@@ -9,17 +10,21 @@ export function seed(): void {
      VALUES (?, ?, 'Draft', ?, ?)
      ON CONFLICT(id) DO NOTHING`
   ).run(
-    "season-2",
-    "SpoonOS Community Contribution Program · Season 2",
-    "2026-08-10T00:00:00Z",
-    "2026-10-10T23:59:59Z"
+    config.defaultSeasonId,
+    config.seasonName,
+    config.seasonStartsAt ?? null,
+    config.seasonEndsAt ?? null
   );
 
   const repository = new TaskRepository();
   let created = 0;
   let translated = 0;
   let precheckUpdated = 0;
-  for (const task of season2Tasks) {
+  const tasks = season2Tasks.map((task) => ({
+    ...task,
+    seasonId: config.defaultSeasonId
+  }));
+  for (const task of tasks) {
     const existing = repository.get(task.id, task.seasonId);
     if (!existing) {
       repository.create(task, "seed");
