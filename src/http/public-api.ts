@@ -59,7 +59,7 @@ const publicSeason = (seasonId: string): PublicSeason => {
   return (
     row ?? {
       id: seasonId,
-      name: "SpoonOS Community Contribution Program · Season 2"
+      name: config.seasonName
     }
   );
 };

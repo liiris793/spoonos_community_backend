@@ -236,7 +236,7 @@ async function handleCommand(
       embeds: [
         new EmbedBuilder()
           .setColor(0x2563eb)
-          .setTitle("SpoonOS Community Contribution Program · Season 2")
+          .setTitle(config.seasonName)
           .setDescription(
             "Complete missions, contribute content, and help build the community to earn season points and levels."
           )
@@ -263,7 +263,7 @@ async function handleCommand(
             .setColor(0x2563eb)
             .setTitle("SpoonOS Community Tasks")
             .setDescription(
-              "Browse all published tasks, compare difficulty and points, and view the live Season 2 leaderboard."
+              `Browse all published tasks, compare difficulty and points, and view the live ${config.seasonName} leaderboard.`
             )
             .setURL(config.communityPortalUrl)
             .addFields({
@@ -293,7 +293,7 @@ async function handleCommand(
       embeds: [
         new EmbedBuilder()
           .setColor(0x2563eb)
-          .setTitle("Season 2 Task Center")
+          .setTitle(`${config.seasonName} Task Center`)
           .setDescription(
             lines.length
               ? `${lines.join("\n")}\n\nUse \`/task task_id:T018\` to view details.${
@@ -351,7 +351,7 @@ async function handleCommand(
       embeds: [
         new EmbedBuilder()
           .setColor(0x2563eb)
-          .setTitle(`${interaction.user.username}'s Season 2 Progress`)
+          .setTitle(`${interaction.user.username}'s ${config.seasonName} Progress`)
           .addFields(
             {
               name: "Level",
@@ -489,7 +489,7 @@ async function handleCommand(
       embeds: [
         new EmbedBuilder()
           .setColor(0xf59e0b)
-          .setTitle("Season 2 Leaderboard")
+          .setTitle(`${config.seasonName} Leaderboard`)
           .setDescription(
             rows.length
               ? rows
