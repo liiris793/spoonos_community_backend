@@ -23,17 +23,25 @@ class FakeActivityPrecheck extends ActivityPrecheckClient {
           candidateMessages: input.messages.length,
           rulePassedMessages: input.messages.length,
           aiValidMessages: this.validCount,
-          suggestedPoints: Math.min(this.validCount, 5) * 4,
+          casualPoints: Math.min(Math.max(this.validCount - 1, 0) * 3, 15),
+          meaningfulPoints: Math.min(this.validCount, 1) * 5,
+          suggestedPoints: Math.min(
+            Math.min(Math.max(this.validCount - 1, 0) * 3, 15) +
+              Math.min(this.validCount, 1) * 5,
+            20
+          ),
           recommendation: "pass" as const,
           flags: [],
           reviewQuestions: ["Verify the topic relevance."],
-          messages: input.messages.map((message) => ({
+          messages: input.messages.map((message, index) => ({
             messageId: message.messageId,
             ruleStatus: "pass" as const,
             ruleFlags: [],
             aiStatus: "valid" as const,
             relevanceScore: 90,
             qualityScore: 80,
+            category: index === 0 ? "meaningful" as const : "casual" as const,
+            points: index === 0 ? 5 : 3,
             reason: "Relevant and substantive"
           }))
         }
@@ -110,7 +118,7 @@ describe("daily activity pre-review", () => {
 
     const result = await activity.prepareDailyReview("test-season", "2026-07-30");
     expect(result.submissionsCreated).toBe(1);
-    expect(new PointsRepository().total("test-season", "user-1")).toBe(20);
+    expect(new PointsRepository().total("test-season", "user-1")).toBe(17);
 
     const submission = db.prepare(
       "SELECT id, status FROM submissions WHERE task_id = 'T001'"
@@ -156,7 +164,7 @@ describe("daily activity pre-review", () => {
     expect(pointsRepo.total("test-season", "user-1")).toBe(800);
   });
 
-  it("awards partial points based on valid message count (3 valid = 12 points)", async () => {
+  it("applies the casual and meaningful daily caps", async () => {
     const activity = new ActivityService(
       new TaskService(),
       new FakeActivityPrecheck(3),
@@ -176,8 +184,8 @@ describe("daily activity pre-review", () => {
 
     const result = await activity.prepareDailyReview("test-season", "2026-08-01");
     expect(result.submissionsCreated).toBe(1);
-    expect(result.pointsAwarded).toBe(12);
-    expect(new PointsRepository().total("test-season", "user-1")).toBe(12);
+    expect(result.pointsAwarded).toBe(11);
+    expect(new PointsRepository().total("test-season", "user-1")).toBe(11);
   });
 
   it("awards 0 points when no valid messages", async () => {

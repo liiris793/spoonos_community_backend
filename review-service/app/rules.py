@@ -24,6 +24,20 @@ def text_without_urls(value: str) -> str:
     return normalize_text(URL_RE.sub("", value))
 
 
+def casual_points(content: str) -> int:
+    """Calculate length-based points for an eligible casual message."""
+    length = len(text_without_urls(content))
+    if length < 12:
+        return 0
+    if length < 30:
+        return 2
+    if length < 80:
+        return 3
+    if length < 150:
+        return 4
+    return 5
+
+
 def activity_rule_check(content: str) -> tuple[bool, list[str]]:
     text = normalize_text(content)
     flags: list[str] = []

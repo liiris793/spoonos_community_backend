@@ -6,6 +6,7 @@ from typing import Any
 from .llm import LlmReviewer
 from .rules import (
     activity_rule_check,
+    casual_points,
     duplicate_flags,
     is_http_url,
     normalize_text,
@@ -241,17 +242,21 @@ async def precheck_activity(
                         messageId=message.messageId,
                         ruleStatus="pass" if ok else "fail",
                         ruleFlags=flags,
+                        category="casual" if ok else None,
                         reason="Passed deterministic filters" if ok else ", ".join(flags),
                     )
                 )
 
             ai = await llm.review(
                 system=(
-                    "You evaluate Discord messages for daily meaningful community participation. "
-                    "For every message, judge relevance to the supplied topic, substantive value, and "
-                    "whether it looks like generic filler. Return JSON with items: [{message_id, "
+                    "You evaluate Discord messages for daily community participation. A valid message "
+                    "can be ordinary casual conversation on any topic, or a meaningful topic contribution. "
+                    "Only classify it as meaningful when it is specifically about SpoonOS, AI, agents, "
+                    "technology, product use, or community activities and adds useful substance. Casual "
+                    "conversation should be classified as casual even when unrelated to those topics. "
+                    "Return JSON with items: [{message_id, "
                     "status: valid|invalid|uncertain, relevance_score:0-100, quality_score:0-100, "
-                    "reason}]. Evaluate only the messages provided."
+                    "category: casual|meaningful, reason}]. Evaluate only the messages provided."
                 ),
                 payload={
                     "topic_definition": request.topicDefinition,
@@ -269,6 +274,8 @@ async def precheck_activity(
             }
             ai_enabled = ai.get("status") not in {"skipped", "error"}
             valid_count = 0
+            casual_total = 0
+            meaningful_count = 0
             for decision in decisions:
                 if decision.ruleStatus == "fail":
                     continue
@@ -283,8 +290,24 @@ async def precheck_activity(
                     decision.reason = str(item.get("reason", ""))[:500]
                     if status == "valid":
                         valid_count += 1
+                        category = str(item.get("category", "meaningful"))
+                        decision.category = category if category in {"casual", "meaningful"} else "meaningful"
+                        if decision.category == "meaningful":
+                            meaningful_count += 1
+                            decision.points = 5
+                        else:
+                            decision.points = casual_points(
+                                next(m.content for m in passed if m.messageId == decision.messageId)
+                            )
+                            casual_total += decision.points
                 else:
                     decision.aiStatus = "skipped" if not ai_enabled else "uncertain"
+                    if not item or not ai_enabled:
+                        decision.category = "casual"
+                        decision.points = casual_points(
+                            next(m.content for m in passed if m.messageId == decision.messageId)
+                        )
+                        casual_total += decision.points
                     decision.reason = (
                         "AI was not configured; manual topic review required."
                         if not ai_enabled else "AI returned no decision; manual review required."
@@ -293,11 +316,14 @@ async def precheck_activity(
             flags: list[str] = []
             if not ai_enabled and passed:
                 flags.append("ai_not_configured")
+            casual_points_awarded = min(casual_total, 15)
+            meaningful_points_awarded = min(meaningful_count, 1) * 5
+            suggested_points = min(casual_points_awarded + meaningful_points_awarded, 20)
             count_for_threshold = valid_count if ai_enabled else len(passed)
-            if count_for_threshold < request.threshold:
+            if count_for_threshold < request.threshold and suggested_points == 0:
                 flags.append("daily_threshold_not_met")
             recommendation = (
-                "pass" if ai_enabled and valid_count >= request.threshold
+                "pass" if suggested_points > 0
                 else "revision" if len(passed) < request.threshold
                 else "review"
             )
@@ -306,7 +332,9 @@ async def precheck_activity(
                 candidateMessages=len(messages),
                 rulePassedMessages=len(passed),
                 aiValidMessages=valid_count,
-                suggestedPoints=request.basePoints if recommendation == "pass" else 0,
+                casualPoints=casual_points_awarded,
+                meaningfulPoints=meaningful_points_awarded,
+                suggestedPoints=suggested_points,
                 recommendation=recommendation,
                 flags=flags,
                 reviewQuestions=[
