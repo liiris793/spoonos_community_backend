@@ -464,29 +464,12 @@ async function handleCommand(
         value: submission.finalPoints != null ? `${submission.finalPoints} pts` : "Pending",
         inline: true
       },
-      { name: "Submitted At", value: submission.createdAt, inline: true },
-      { name: "Review Note", value: submission.reviewNote || "—" }
+      { name: "Submitted At", value: submission.createdAt, inline: true }
     ];
-    if (submission.aiPrecheck) {
-      const ai = submission.aiPrecheck;
-      fields.push({
-        name: "AI Precheck",
-        value: `Recommendation: ${ai.recommendation} · Score: ${ai.score}${
-          ai.flags.length ? `\nFlags: ${ai.flags.join(", ")}` : ""
-        }`
-      });
-    }
     const embed = new EmbedBuilder()
       .setColor(0x2563eb)
       .setTitle(`Submission ${submission.id}`)
-      .addFields(fields)
-      .addFields({
-        name: "Summary",
-        value: submission.summary.slice(0, 1000) || "—"
-      });
-    if (submission.proofUrl) {
-      embed.addFields({ name: "Proof URL", value: submission.proofUrl });
-    }
+      .addFields(fields);
     await interaction.reply({
       embeds: [embed],
       flags: MessageFlags.Ephemeral

@@ -193,13 +193,11 @@ export class ActivityService {
         ).get(seasonId, user.userId, activityDate);
         if (existing) continue;
 
-        // Points: 4 per valid message, max 5 messages = 20/day
-        const POINTS_PER_MESSAGE = 4;
-        const MAX_MESSAGES_PER_DAY = 5;
-        const validCount = Math.min(user.aiValidMessages, MAX_MESSAGES_PER_DAY);
-        if (validCount === 0) continue;
+        // Casual messages contribute 2-5 points by length (max 15/day), while
+        // one meaningful topic contribution contributes 5 more (max 20/day).
+        if (user.suggestedPoints <= 0) continue;
 
-        let awardPoints = validCount * POINTS_PER_MESSAGE;
+        let awardPoints = user.suggestedPoints;
 
         // Check season points cap
         if (seasonCap) {
@@ -217,14 +215,7 @@ export class ActivityService {
           {
             taskId: "T001",
             userId: user.userId,
-            summary: [
-              `Daily activity auto-approved for ${activityDate} UTC.`,
-              `Candidate messages: ${user.candidateMessages}.`,
-              `Rule-passed messages: ${user.rulePassedMessages}.`,
-              `AI-valid messages: ${user.aiValidMessages}.`,
-              `Scored messages: ${validCount} / ${MAX_MESSAGES_PER_DAY}.`,
-              `Awarded points: ${awardPoints}.`
-            ].join(" "),
+            summary: "Daily activity auto-approved.",
             structuredData: {
               source: "daily_activity_precheck",
               activityDate,

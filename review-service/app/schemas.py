@@ -80,6 +80,8 @@ class MessageDecision(BaseModel):
     aiStatus: Literal["valid", "invalid", "uncertain", "skipped"] = "skipped"
     relevanceScore: int | None = None
     qualityScore: int | None = None
+    category: Literal["casual", "meaningful"] | None = None
+    points: int = 0
     reason: str = ""
 
 
@@ -88,6 +90,8 @@ class ActivityUserResult(BaseModel):
     candidateMessages: int
     rulePassedMessages: int
     aiValidMessages: int
+    casualPoints: int = 0
+    meaningfulPoints: int = 0
     suggestedPoints: int
     recommendation: Recommendation
     flags: list[str] = Field(default_factory=list)

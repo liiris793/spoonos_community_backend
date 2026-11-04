@@ -28,6 +28,8 @@ export type ActivityMessageDecision = {
   aiStatus: "valid" | "invalid" | "uncertain" | "skipped";
   relevanceScore?: number;
   qualityScore?: number;
+  category?: "casual" | "meaningful";
+  points: number;
   reason: string;
 };
 
@@ -36,6 +38,8 @@ export type ActivityUserPrecheck = {
   candidateMessages: number;
   rulePassedMessages: number;
   aiValidMessages: number;
+  casualPoints: number;
+  meaningfulPoints: number;
   suggestedPoints: number;
   recommendation: "pass" | "review" | "revision";
   flags: string[];

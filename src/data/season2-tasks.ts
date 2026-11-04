@@ -87,7 +87,7 @@ const task = (input: SeedTask): TaskConfig => ({
   ...(input.id === "T001"
     ? {
         topicDefinition:
-          "Meaningful discussion about SpoonOS, AI, agents, technical development, product use, community questions, and current official discussion topics.",
+          "Meaningful contributions about SpoonOS, AI, agents, technical development, product use, community questions, and current official discussion topics. Ordinary casual conversation on any topic is also valid when it is not trivial, spam, advertising, or meaningless.",
         positiveExamples: [
           "A concrete technical question or actionable answer",
           "A relevant insight with reasoning or a real example",
@@ -109,8 +109,8 @@ export const season2Tasks: TaskConfig[] = [
     difficulty: "Quick",
     title: "Daily Community Activity",
     points: 20,
-    description: "Post at least five meaningful messages related to active community topics in one day.",
-    requirements: ["No duplicates, sentence splitting, or emoji spam", "No advertising, scams, or meaningless messages"],
+    description: "Participate in daily community conversation. Ordinary conversation earns 2-5 points by message length, while one substantive SpoonOS, AI, technology, product, or community contribution can earn an additional 5 points.",
+    requirements: ["Ordinary conversation is allowed on any topic, but hello, GM/GN, thanks-only, emoji-only, link-only, duplicate, spam, advertising, scam, and meaningless messages do not qualify", "Ordinary conversation earns 2-5 points by length, with a maximum of 15 casual points per UTC day", "A substantive SpoonOS, AI, technology, product, or community contribution earns 5 points, with a maximum of 5 topic-contribution points per UTC day", "The total daily reward is capped at 20 points"],
   limits: { perDay: 1 },
   reviewMode: "auto",
   seasonPointsCap: 800,
