@@ -402,8 +402,19 @@ export class SubmissionService {
   }
 
   /** Build an xlsx workbook (as a Buffer) containing every submission by a user. */
-  exportUserSubmissions(seasonId: string, userId: string): Buffer {
-    const rows = this.submissions.listByUser(seasonId, userId);
+  exportUserSubmissions(
+    seasonId: string,
+    userId: string,
+    range?: { startUtc: string; endUtc: string }
+  ): Buffer {
+    const rows = range
+      ? this.submissions.listByUserBetween(
+          seasonId,
+          userId,
+          range.startUtc,
+          range.endUtc
+        )
+      : this.submissions.listByUser(seasonId, userId);
     const headers = [
       "Submission ID",
       "Task ID",

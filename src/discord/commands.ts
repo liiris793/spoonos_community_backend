@@ -64,6 +64,12 @@ export const commands = [
     .setName("mysubmissions")
     .setDescription("View your own submissions (latest 10; full spreadsheet if you have more)"),
   new SlashCommandBuilder()
+    .setName("my-weekly-submissions")
+    .setDescription("View your submissions from the current UTC week"),
+  new SlashCommandBuilder()
+    .setName("my-monthly-submissions")
+    .setDescription("View your submissions from the current UTC month"),
+  new SlashCommandBuilder()
     .setName("mysubmission")
     .setDescription("View a single submission's review details by ID")
     .addStringOption((option) =>
