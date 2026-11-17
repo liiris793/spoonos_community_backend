@@ -144,6 +144,23 @@ export class SubmissionRepository {
     return rows.map(rowToSubmission);
   }
 
+  listByUserBetween(
+    seasonId: string,
+    userId: string,
+    startUtc: string,
+    endUtc: string
+  ): SubmissionRecord[] {
+    const rows = db
+      .prepare(
+        `SELECT * FROM submissions
+         WHERE season_id = ? AND user_id = ?
+           AND created_at >= ? AND created_at < ?
+         ORDER BY created_at DESC`
+      )
+      .all(seasonId, userId, startUtc, endUtc) as SubmissionRow[];
+    return rows.map(rowToSubmission);
+  }
+
   listRecentTexts(
     seasonId: string,
     taskId: string,

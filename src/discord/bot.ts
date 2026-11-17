@@ -56,6 +56,37 @@ const formatSeasonDate = (value?: string): string => {
   return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 };
 
+type SubmissionPeriod = {
+  label: string;
+  startUtc: string;
+  endUtc: string;
+};
+
+const sqlUtc = (date: Date): string =>
+  date.toISOString().slice(0, 19).replace("T", " ");
+
+const currentSubmissionPeriod = (period: "week" | "month"): SubmissionPeriod => {
+  const now = new Date();
+  const start = new Date(now);
+  if (period === "week") {
+    const daysSinceMonday = (now.getUTCDay() + 6) % 7;
+    start.setUTCDate(now.getUTCDate() - daysSinceMonday);
+    start.setUTCHours(0, 0, 0, 0);
+  } else {
+    start.setUTCDate(1);
+    start.setUTCHours(0, 0, 0, 0);
+  }
+  const end = new Date(start);
+  if (period === "week") end.setUTCDate(end.getUTCDate() + 7);
+  else end.setUTCMonth(end.getUTCMonth() + 1);
+  const formatDate = (value: Date) => value.toISOString().slice(0, 10);
+  return {
+    label: `${formatDate(start)} → ${formatDate(end)} UTC`,
+    startUtc: sqlUtc(start),
+    endUtc: sqlUtc(end)
+  };
+};
+
 export function createBot(deps: Dependencies): Client {
   const client = new Client({
     intents: [
@@ -424,6 +455,60 @@ async function handleCommand(
             `${lines.join("\n")}${
               more
                 ? `\n\nShowing the latest 10 of ${all.length}. The full list is attached as a spreadsheet.`
+                : `\n\nTotal: ${all.length} submission(s).`
+            }`
+          )
+      ],
+      files,
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (
+    interaction.commandName === "my-weekly-submissions" ||
+    interaction.commandName === "my-monthly-submissions"
+  ) {
+    const period = currentSubmissionPeriod(
+      interaction.commandName === "my-weekly-submissions" ? "week" : "month"
+    );
+    const all = new SubmissionRepository().listByUserBetween(
+      seasonId,
+      interaction.user.id,
+      period.startUtc,
+      period.endUtc
+    );
+    if (all.length === 0) {
+      await interaction.reply({
+        content: `You have no submissions for ${period.label}.`,
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+    const latest = all.slice(0, 10);
+    const lines = latest.map((s) => {
+      const pts = s.finalPoints != null ? ` · ${s.finalPoints} pts` : "";
+      return `**${s.id}** · ${s.taskId} · ${s.status}${pts} · ${s.createdAt.slice(0, 10)}`;
+    });
+    const more = all.length > 10;
+    const periodKey = interaction.commandName === "my-weekly-submissions" ? "weekly" : "monthly";
+    const files = more
+      ? [
+          new AttachmentBuilder(
+            deps.submissions.exportUserSubmissions(seasonId, interaction.user.id, period),
+            { name: `my-${periodKey}-submissions-${seasonId}.xlsx` }
+          )
+        ]
+      : [];
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x2563eb)
+          .setTitle(`${interaction.user.username}'s ${periodKey} submissions`)
+          .setDescription(
+            `${period.label}\n\n${lines.join("\n")}${
+              more
+                ? `\n\nShowing the latest 10 of ${all.length}. The full period list is attached as a spreadsheet.`
                 : `\n\nTotal: ${all.length} submission(s).`
             }`
           )
